@@ -896,7 +896,6 @@ namespace PIEHidNetCore
             if (hFile.IsInvalid)
             {
                 return 1301;
-                ;
             }
 
             var overlapped = new FileIOApiDeclarations.OVERLAPPED
