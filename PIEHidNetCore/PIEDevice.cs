@@ -182,70 +182,82 @@ namespace PIEHidNetCore
             if (WriteLength == 0)
                 return;
 
+           
             var buffer = new byte[WriteLength];
             var wgch = GCHandle.Alloc(buffer, GCHandleType.Pinned); //onur March 2009 - pinning is required
 
             var byteCount = 0;
-            
 
-            _errCodeW = 0;
-            _errCodeWriteError = 0;
-            while (_writeThreadActive)
+            try
             {
-                if (_writeRing == null)
+                _errCodeW = 0;
+                _errCodeWriteError = 0;
+                while (_writeThreadActive)
                 {
-                    _errCodeW = 407;
-                    _errCodeWriteError = 407;
-                    goto Error;
-                }
-
-                while (_writeRing.Get(buffer) == 0)
-                {
-                    if (0 == FileIOApiDeclarations.WriteFile(_writeFileHandle, wgch.AddrOfPinnedObject(), WriteLength,
-                            ref byteCount, ref overlapped))
+                    if (_writeRing == null)
                     {
-                        var result = Marshal.GetLastWin32Error();
-                        if (result != FileIOApiDeclarations.ERROR_IO_PENDING)
-                            //if ((result == FileIOApiDeclarations.ERROR_INVALID_HANDLE) ||
-                            //    (result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED))
+                        _errCodeW = 407;
+                        _errCodeWriteError = 407;
+                        throw new Exception("Write Result = 407");
+                    }
+
+                    while (_writeRing.Get(buffer) == 0)
+                    {
+                        if (0 == FileIOApiDeclarations.WriteFile(_writeFileHandle, wgch.AddrOfPinnedObject(),
+                                WriteLength,
+                                ref byteCount, ref overlapped))
                         {
-                            if (result == 87)
+                            var result = Marshal.GetLastWin32Error();
+                            if (result != FileIOApiDeclarations.ERROR_IO_PENDING)
+                                //if ((result == FileIOApiDeclarations.ERROR_INVALID_HANDLE) ||
+                                //    (result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED))
                             {
-                                _errCodeW = 412;
-                                _errCodeWriteError = 412;
-                            }
-                            else
-                            {
-                                _errCodeW = result;
-                                _errCodeWriteError = 408;
+                                if (result == 87)
+                                {
+                                    _errCodeW = 412;
+                                    _errCodeWriteError = 412;
+                                }
+                                else
+                                {
+                                    _errCodeW = result;
+                                    _errCodeWriteError = 408;
+                                }
+
+                                throw new Exception("Write Result = 87");
+                              
                             }
 
-                            goto Error;
+                            result = FileIOApiDeclarations.WaitForSingleObject(overlapEvent, 1000);
+                            if (result == FileIOApiDeclarations.WAIT_OBJECT_0) goto WriteCompleted;
+                            _errCodeW = 411;
+                            _errCodeWriteError = 411;
+
+                            throw new Exception("Write Result = 411");
+                            
+                        }
+                        
+                        if ((long)byteCount != WriteLength)
+                        {
+                            _errCodeW = 410;
+                            _errCodeWriteError = 410;
                         }
 
-                        result = FileIOApiDeclarations.WaitForSingleObject(overlapEvent, 1000);
-                        if (result == FileIOApiDeclarations.WAIT_OBJECT_0) goto WriteCompleted;
-                        _errCodeW = 411;
-                        _errCodeWriteError = 411;
-
-                        goto Error;
+                        WriteCompleted: ;
                     }
 
-                    if ((long)byteCount != WriteLength)
-                    {
-                        _errCodeW = 410;
-                        _errCodeWriteError = 410;
-                    }
-
-                    WriteCompleted: ;
+                    _ = FileIOApiDeclarations.WaitForSingleObject(_writeEvent, 100);
+                    _ = FileIOApiDeclarations.ResetEvent(_writeEvent);
                 }
-
-                _ = FileIOApiDeclarations.WaitForSingleObject(_writeEvent, 100);
-                _ = FileIOApiDeclarations.ResetEvent(_writeEvent);
             }
-
-            Error:
-            wgch.Free(); //onur
+                
+            catch (Exception e)
+            {
+                Console.WriteLine("Exception thrown while writing: " + e.ToString());
+            }
+            finally
+            {
+                wgch.Free(); //onur
+            }
         }
 
         private void ReadThread()
@@ -272,86 +284,99 @@ namespace PIEHidNetCore
             var buffer = new byte[ReadLength];
             var gch = GCHandle.Alloc(buffer, GCHandleType.Pinned); //onur March 2009 - pinning is required
 
-            while (_readThreadActive)
+            try
             {
-                var dataRead = 0; //FileIOApiDeclarations.
-                if (_readFileHandle.IsInvalid)
+                while (_readThreadActive)
                 {
-                    _errCodeReadError = _errCodeR = 320;
-                    goto EXit;
-                }
-
-                if (0 == FileIOApiDeclarations.ReadFile(_readFileHandle, gch.AddrOfPinnedObject(), ReadLength,
-                        ref dataRead, ref overlapped)) //ref readFileBuffer[0]
-                {
-                    var result = Marshal.GetLastWin32Error();
-                    if (result != FileIOApiDeclarations
-                            .ERROR_IO_PENDING) //|| result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED)
+                    var dataRead = 0; //FileIOApiDeclarations.
+                    if (_readFileHandle.IsInvalid)
                     {
-                        if (_readFileHandle.IsInvalid)
-                        {
-                            _errCodeReadError = _errCodeR = 321;
-                            goto EXit;
-                        }
-
-                        _errCodeR = result;
-                        _errCodeReadError = 308;
-                        goto EXit;
+                        _errCodeReadError = _errCodeR = 320;
+                        throw new Exception("Read error = 320");
+                        
                     }
 
-                    // gch.Free(); //onur
-                    while (_readThreadActive)
+                    if (0 == FileIOApiDeclarations.ReadFile(_readFileHandle, gch.AddrOfPinnedObject(), ReadLength,
+                            ref dataRead, ref overlapped)) //ref readFileBuffer[0]
                     {
-                        result = FileIOApiDeclarations.WaitForSingleObject(overlapEvent, 50);
-                        if (FileIOApiDeclarations.WAIT_OBJECT_0 == result)
+                        var result = Marshal.GetLastWin32Error();
+                        if (result != FileIOApiDeclarations
+                                .ERROR_IO_PENDING) //|| result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED)
                         {
-                            if (0 == FileIOApiDeclarations.GetOverlappedResult(_readFileHandle, ref overlapped,
-                                    ref dataRead, 0))
+                            if (_readFileHandle.IsInvalid)
                             {
-                                result = Marshal.GetLastWin32Error();
-                                if (result == FileIOApiDeclarations.ERROR_INVALID_HANDLE ||
-                                    result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED)
-                                {
-                                    _errCodeR = 309;
-                                    _errCodeReadError = 309;
-                                    goto EXit;
-                                }
+                                _errCodeReadError = _errCodeR = 321;
+                                throw new Exception("Read error = 321");
+                                
                             }
 
-                            // buffer[0] = 89;
-                            goto ReadCompleted;
+                            _errCodeR = result;
+                            _errCodeReadError = 308;
+                            throw new Exception("Read error = 308");
+                            
                         }
-                    } //while
 
-                    continue;
-                }
+                        // gch.Free(); //onur
+                        while (_readThreadActive)
+                        {
+                            result = FileIOApiDeclarations.WaitForSingleObject(overlapEvent, 50);
+                            if (FileIOApiDeclarations.WAIT_OBJECT_0 == result)
+                            {
+                                if (0 == FileIOApiDeclarations.GetOverlappedResult(_readFileHandle, ref overlapped,
+                                        ref dataRead, 0))
+                                {
+                                    result = Marshal.GetLastWin32Error();
+                                    if (result == FileIOApiDeclarations.ERROR_INVALID_HANDLE ||
+                                        result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED)
+                                    {
+                                        _errCodeR = 309;
+                                        _errCodeReadError = 309;
+                                        throw new Exception("Read error = 309");
+                                    }
+                                }
 
-                //buffer[0] = 90;
-                ReadCompleted:
-                if (dataRead != ReadLength)
-                {
-                    _errCodeR = 310;
-                    _errCodeReadError = 310;
-                    goto EXit;
-                }
+                                // buffer[0] = 89;
+                                
+                                goto ReadCompleted;
+                               
+                            }
+                        } //while
 
-                if (SuppressDuplicateReports)
-                {
-                    var r = _readRing.TryPutChanged(buffer);
-                    if (r == 0)
+                        continue;
+                    }
+
+                    //buffer[0] = 90;
+                    ReadCompleted:
+                    if (dataRead != ReadLength)
+                    {
+                        _errCodeR = 310;
+                        _errCodeReadError = 310;
+                        throw new Exception("Read Error = 310");
+                    }
+
+                    if (SuppressDuplicateReports)
+                    {
+                        var r = _readRing.TryPutChanged(buffer);
+                        if (r == 0)
+                            _ = FileIOApiDeclarations.SetEvent(_readEvent);
+                    }
+                    else
+                    {
+                        _readRing.Put(buffer);
                         _ = FileIOApiDeclarations.SetEvent(_readEvent);
-                }
-                else
-                {
-                    _readRing.Put(buffer);
-                    _ = FileIOApiDeclarations.SetEvent(_readEvent);
-                }
-            } //while
-
-            EXit:
-            _ = FileIOApiDeclarations.CancelIo(_readFileHandle);
-            _readFileHandle = null;
-            gch.Free();
+                    }
+                } //while
+            }
+            catch (Exception e)
+            {
+                Console.Write("Exception thrown:" + e.ToString());
+            }
+            finally
+            {
+                _ = FileIOApiDeclarations.CancelIo(_readFileHandle);
+                _readFileHandle = null;
+                gch.Free();
+            }
         }
 
         private void DataEventThread()
