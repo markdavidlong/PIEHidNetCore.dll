@@ -12,35 +12,33 @@ namespace PIEHidNetCore
     /// </summary>
     public class PIEDevice
     {
-        private static readonly ushort[] convertToSplatModeSausages = { 7, 5, 4, 3, 2, 1 };
-        private static readonly ushort[] ledSausages = { 7, 3, 1, 6, 4, 2 };
-        private bool connected;
-        private bool dataThreadActive;
-        private Thread dataThreadHandle;
+        private bool _connected;
+        private bool _dataThreadActive;
+        private Thread _dataThreadHandle;
 
-        private int errCodeR;
-        private int errCodeReadError;
-        private int errCodeW;
-        private int errCodeWriteError;
-        private bool errorThreadActive;
-        private Thread errorThreadHandle;
-        private bool holdDataThreadOpen;
-        private bool holdErrorThreadOpen;
-        private IntPtr readEvent;
-        private IntPtr readFileH;
-        private SafeFileHandle readFileHandle;
-        private RingBuffer readRing;
-        private bool readThreadActive;
+        private int _errCodeR;
+        private int _errCodeReadError;
+        private int _errCodeW;
+        private int _errCodeWriteError;
+        private bool _errorThreadActive;
+        private Thread _errorThreadHandle;
+        private bool _holdDataThreadOpen;
+        private bool _holdErrorThreadOpen;
+        private IntPtr _readEvent;
+        private IntPtr _readFileH;
+        private SafeFileHandle _readFileHandle;
+        private RingBuffer _readRing;
+        private bool _readThreadActive;
 
-        private Thread readThreadHandle;
-        private PIEDataHandler registeredDataHandler;
-        private PIEErrorHandler registeredErrorHandler;
-        private FileIOApiDeclarations.SECURITY_ATTRIBUTES securityAttrUnused;
-        private IntPtr writeEvent;
-        private SafeFileHandle writeFileHandle;
-        private RingBuffer writeRing;
-        private bool writeThreadActive;
-        private Thread writeThreadHandle;
+        private Thread _readThreadHandle;
+        private PIEDataHandler _registeredDataHandler;
+        private PIEErrorHandler _registeredErrorHandler;
+        private FileIOApiDeclarations.SECURITY_ATTRIBUTES _securityAttrUnused;
+        private IntPtr _writeEvent;
+        private SafeFileHandle _writeFileHandle;
+        private RingBuffer _writeRing;
+        private bool _writeThreadActive;
+        private Thread _writeThreadHandle;
 
         /// <summary>
         ///     public ctor
@@ -68,7 +66,7 @@ namespace PIEHidNetCore
             WriteLength = writeSize;
             ManufacturersString = manufacturersString;
             ProductString = productString;
-            securityAttrUnused.bInheritHandle = 1;
+            _securityAttrUnused.bInheritHandle = 1;
         }
 
         /// <summary>
@@ -124,12 +122,12 @@ namespace PIEHidNetCore
         /// <summary>
         ///     Suppresses duplicate/same reports, only reporting changes
         /// </summary>
-        public bool suppressDuplicateReports { get; set; }
+        public bool SuppressDuplicateReports { get; set; }
 
         /// <summary>
         ///     Completely disables reporting by device
         /// </summary>
-        public bool disableReporting { get; set; }
+        public bool DisableReporting { get; set; }
 
         /// <summary>
         ///     Translating error codes into messages
@@ -145,24 +143,24 @@ namespace PIEHidNetCore
 
         private void ErrorThread()
         {
-            while (errorThreadActive)
+            while (_errorThreadActive)
             {
-                if (errCodeReadError != 0)
+                if (_errCodeReadError != 0)
                 {
-                    holdDataThreadOpen = true;
-                    registeredErrorHandler.HandlePIEHidError(this, errCodeReadError);
-                    holdDataThreadOpen = false;
+                    _holdDataThreadOpen = true;
+                    _registeredErrorHandler.HandlePIEHidError(this, _errCodeReadError);
+                    _holdDataThreadOpen = false;
                 }
 
-                if (errCodeWriteError != 0)
+                if (_errCodeWriteError != 0)
                 {
-                    holdErrorThreadOpen = true;
-                    registeredErrorHandler.HandlePIEHidError(this, errCodeWriteError);
-                    holdErrorThreadOpen = false;
+                    _holdErrorThreadOpen = true;
+                    _registeredErrorHandler.HandlePIEHidError(this, _errCodeWriteError);
+                    _holdErrorThreadOpen = false;
                 }
 
-                errCodeReadError = 0;
-                errCodeWriteError = 0;
+                _errCodeReadError = 0;
+                _errCodeWriteError = 0;
                 Thread.Sleep(25);
             }
         }
@@ -172,8 +170,7 @@ namespace PIEHidNetCore
         /// </summary>
         private void WriteThread()
         {
-            //   FileIOApiDeclarations.SECURITY_ATTRIBUTES securityAttrUnused = new FileIOApiDeclarations.SECURITY_ATTRIBUTES();
-            var overlapEvent = FileIOApiDeclarations.CreateEvent(ref securityAttrUnused, 1, 0, "");
+            var overlapEvent = FileIOApiDeclarations.CreateEvent(ref _securityAttrUnused, 1, 0, "");
             var overlapped = new FileIOApiDeclarations.OVERLAPPED
             {
                 Offset = 0,
@@ -189,22 +186,22 @@ namespace PIEHidNetCore
             var wgch = GCHandle.Alloc(buffer, GCHandleType.Pinned); //onur March 2009 - pinning is required
 
             var byteCount = 0;
-            ;
+            
 
-            errCodeW = 0;
-            errCodeWriteError = 0;
-            while (writeThreadActive)
+            _errCodeW = 0;
+            _errCodeWriteError = 0;
+            while (_writeThreadActive)
             {
-                if (writeRing == null)
+                if (_writeRing == null)
                 {
-                    errCodeW = 407;
-                    errCodeWriteError = 407;
+                    _errCodeW = 407;
+                    _errCodeWriteError = 407;
                     goto Error;
                 }
 
-                while (writeRing.Get(buffer) == 0)
+                while (_writeRing.Get(buffer) == 0)
                 {
-                    if (0 == FileIOApiDeclarations.WriteFile(writeFileHandle, wgch.AddrOfPinnedObject(), WriteLength,
+                    if (0 == FileIOApiDeclarations.WriteFile(_writeFileHandle, wgch.AddrOfPinnedObject(), WriteLength,
                             ref byteCount, ref overlapped))
                     {
                         var result = Marshal.GetLastWin32Error();
@@ -214,13 +211,13 @@ namespace PIEHidNetCore
                         {
                             if (result == 87)
                             {
-                                errCodeW = 412;
-                                errCodeWriteError = 412;
+                                _errCodeW = 412;
+                                _errCodeWriteError = 412;
                             }
                             else
                             {
-                                errCodeW = result;
-                                errCodeWriteError = 408;
+                                _errCodeW = result;
+                                _errCodeWriteError = 408;
                             }
 
                             goto Error;
@@ -228,23 +225,23 @@ namespace PIEHidNetCore
 
                         result = FileIOApiDeclarations.WaitForSingleObject(overlapEvent, 1000);
                         if (result == FileIOApiDeclarations.WAIT_OBJECT_0) goto WriteCompleted;
-                        errCodeW = 411;
-                        errCodeWriteError = 411;
+                        _errCodeW = 411;
+                        _errCodeWriteError = 411;
 
                         goto Error;
                     }
 
                     if ((long)byteCount != WriteLength)
                     {
-                        errCodeW = 410;
-                        errCodeWriteError = 410;
+                        _errCodeW = 410;
+                        _errCodeWriteError = 410;
                     }
 
                     WriteCompleted: ;
                 }
 
-                _ = FileIOApiDeclarations.WaitForSingleObject(writeEvent, 100);
-                _ = FileIOApiDeclarations.ResetEvent(writeEvent);
+                _ = FileIOApiDeclarations.WaitForSingleObject(_writeEvent, 100);
+                _ = FileIOApiDeclarations.ResetEvent(_writeEvent);
             }
 
             Error:
@@ -253,7 +250,7 @@ namespace PIEHidNetCore
 
         private void ReadThread()
         {
-            var overlapEvent = FileIOApiDeclarations.CreateEvent(ref securityAttrUnused, 1, 0, "");
+            var overlapEvent = FileIOApiDeclarations.CreateEvent(ref _securityAttrUnused, 1, 0, "");
             var overlapped = new FileIOApiDeclarations.OVERLAPPED
             {
                 Offset = 0,
@@ -264,59 +261,59 @@ namespace PIEHidNetCore
             };
             if (ReadLength == 0)
             {
-                errCodeR = 302;
-                errCodeReadError = 302;
+                _errCodeR = 302;
+                _errCodeReadError = 302;
                 return;
             }
 
-            errCodeR = 0;
-            errCodeReadError = 0;
+            _errCodeR = 0;
+            _errCodeReadError = 0;
 
             var buffer = new byte[ReadLength];
             var gch = GCHandle.Alloc(buffer, GCHandleType.Pinned); //onur March 2009 - pinning is required
 
-            while (readThreadActive)
+            while (_readThreadActive)
             {
                 var dataRead = 0; //FileIOApiDeclarations.
-                if (readFileHandle.IsInvalid)
+                if (_readFileHandle.IsInvalid)
                 {
-                    errCodeReadError = errCodeR = 320;
+                    _errCodeReadError = _errCodeR = 320;
                     goto EXit;
                 }
 
-                if (0 == FileIOApiDeclarations.ReadFile(readFileHandle, gch.AddrOfPinnedObject(), ReadLength,
+                if (0 == FileIOApiDeclarations.ReadFile(_readFileHandle, gch.AddrOfPinnedObject(), ReadLength,
                         ref dataRead, ref overlapped)) //ref readFileBuffer[0]
                 {
                     var result = Marshal.GetLastWin32Error();
                     if (result != FileIOApiDeclarations
                             .ERROR_IO_PENDING) //|| result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED)
                     {
-                        if (readFileHandle.IsInvalid)
+                        if (_readFileHandle.IsInvalid)
                         {
-                            errCodeReadError = errCodeR = 321;
+                            _errCodeReadError = _errCodeR = 321;
                             goto EXit;
                         }
 
-                        errCodeR = result;
-                        errCodeReadError = 308;
+                        _errCodeR = result;
+                        _errCodeReadError = 308;
                         goto EXit;
                     }
 
                     // gch.Free(); //onur
-                    while (readThreadActive)
+                    while (_readThreadActive)
                     {
                         result = FileIOApiDeclarations.WaitForSingleObject(overlapEvent, 50);
                         if (FileIOApiDeclarations.WAIT_OBJECT_0 == result)
                         {
-                            if (0 == FileIOApiDeclarations.GetOverlappedResult(readFileHandle, ref overlapped,
+                            if (0 == FileIOApiDeclarations.GetOverlappedResult(_readFileHandle, ref overlapped,
                                     ref dataRead, 0))
                             {
                                 result = Marshal.GetLastWin32Error();
                                 if (result == FileIOApiDeclarations.ERROR_INVALID_HANDLE ||
                                     result == FileIOApiDeclarations.ERROR_DEVICE_NOT_CONNECTED)
                                 {
-                                    errCodeR = 309;
-                                    errCodeReadError = 309;
+                                    _errCodeR = 309;
+                                    _errCodeReadError = 309;
                                     goto EXit;
                                 }
                             }
@@ -333,27 +330,27 @@ namespace PIEHidNetCore
                 ReadCompleted:
                 if (dataRead != ReadLength)
                 {
-                    errCodeR = 310;
-                    errCodeReadError = 310;
+                    _errCodeR = 310;
+                    _errCodeReadError = 310;
                     goto EXit;
                 }
 
-                if (suppressDuplicateReports)
+                if (SuppressDuplicateReports)
                 {
-                    var r = readRing.TryPutChanged(buffer);
+                    var r = _readRing.TryPutChanged(buffer);
                     if (r == 0)
-                        _ = FileIOApiDeclarations.SetEvent(readEvent);
+                        _ = FileIOApiDeclarations.SetEvent(_readEvent);
                 }
                 else
                 {
-                    readRing.Put(buffer);
-                    _ = FileIOApiDeclarations.SetEvent(readEvent);
+                    _readRing.Put(buffer);
+                    _ = FileIOApiDeclarations.SetEvent(_readEvent);
                 }
             } //while
 
             EXit:
-            _ = FileIOApiDeclarations.CancelIo(readFileHandle);
-            readFileHandle = null;
+            _ = FileIOApiDeclarations.CancelIo(_readFileHandle);
+            _readFileHandle = null;
             gch.Free();
         }
 
@@ -361,33 +358,33 @@ namespace PIEHidNetCore
         {
             var currBuff = new byte[ReadLength];
 
-            while (dataThreadActive)
+            while (_dataThreadActive)
             {
-                if (readRing == null)
+                if (_readRing == null)
                     return;
-                if (!disableReporting)
+                if (!DisableReporting)
                 {
-                    if (errCodeR != 0)
+                    if (_errCodeR != 0)
                     {
                         Array.Clear(currBuff, 0, ReadLength);
-                        holdDataThreadOpen = true;
-                        registeredDataHandler.HandlePIEHidData(currBuff, this, errCodeR);
-                        holdDataThreadOpen = false;
-                        dataThreadActive = false;
+                        _holdDataThreadOpen = true;
+                        _registeredDataHandler.HandlePIEHidData(currBuff, this, _errCodeR);
+                        _holdDataThreadOpen = false;
+                        _dataThreadActive = false;
                     }
-                    else if (readRing.Get(currBuff) == 0)
+                    else if (_readRing.Get(currBuff) == 0)
                     {
-                        holdDataThreadOpen = true;
-                        registeredDataHandler.HandlePIEHidData(currBuff, this, 0);
-                        holdDataThreadOpen = false;
+                        _holdDataThreadOpen = true;
+                        _registeredDataHandler.HandlePIEHidData(currBuff, this, 0);
+                        _holdDataThreadOpen = false;
                     }
 
-                    if (readRing.IsEmpty())
-                        _ = FileIOApiDeclarations.ResetEvent(readEvent);
+                    if (_readRing.IsEmpty())
+                        _ = FileIOApiDeclarations.ResetEvent(_readEvent);
                 }
 
                 // System.Threading.Thread.Sleep(10);
-                _ = FileIOApiDeclarations.WaitForSingleObject(readEvent, 100);
+                _ = FileIOApiDeclarations.WaitForSingleObject(_readEvent, 100);
             }
         }
 
@@ -403,36 +400,34 @@ namespace PIEHidNetCore
             var retin = 0;
             var retout = 0;
 
-            if (connected) return 203;
+            if (_connected) return 203;
             if (ReadLength > 0)
             {
-                readFileH = FileIOApiDeclarations.CreateFile(Path, FileIOApiDeclarations.GENERIC_READ,
+                _readFileH = FileIOApiDeclarations.CreateFile(Path, FileIOApiDeclarations.GENERIC_READ,
                     FileIOApiDeclarations.FILE_SHARE_READ | FileIOApiDeclarations.FILE_SHARE_WRITE,
                     IntPtr.Zero, FileIOApiDeclarations.OPEN_EXISTING, FileIOApiDeclarations.FILE_FLAG_OVERLAPPED, 0);
 
-                readFileHandle = new SafeFileHandle(readFileH, true);
-                if (readFileHandle.IsInvalid)
+                _readFileHandle = new SafeFileHandle(_readFileH, true);
+                if (_readFileHandle.IsInvalid)
                 {
-                    //readEvent = null;
-                    //readFileHandle = null;
-                    readRing = null;
-                    //CloseInterface();
+                    _readRing = null;
                     retin = 207;
-                    goto outputinit;
                 }
-
-                readEvent = FileIOApiDeclarations.CreateEvent(ref securityAttrUnused, 1, 0, "");
-                readRing = new RingBuffer(128, ReadLength);
-                readThreadHandle = new Thread(ReadThread)
+                else
                 {
-                    IsBackground = true,
-                    Name = $"PIEHidReadThread for {Pid}"
-                };
-                readThreadActive = true;
-                readThreadHandle.Start();
+                    _readEvent = FileIOApiDeclarations.CreateEvent(ref _securityAttrUnused, 1, 0, "");
+                    _readRing = new RingBuffer(128, ReadLength);
+                    _readThreadHandle = new Thread(ReadThread)
+                    {
+                        IsBackground = true,
+                        Name = $"PIEHidReadThread for {Pid}"
+                    };
+                    _readThreadActive = true;
+                    _readThreadHandle.Start();
+                }
             }
 
-            outputinit:
+
             if (WriteLength > 0)
             {
                 var writeFileH = FileIOApiDeclarations.CreateFile(Path, FileIOApiDeclarations.GENERIC_WRITE,
@@ -440,32 +435,36 @@ namespace PIEHidNetCore
                     IntPtr.Zero, FileIOApiDeclarations.OPEN_EXISTING,
                     FileIOApiDeclarations.FILE_FLAG_OVERLAPPED,
                     0);
-                writeFileHandle = new SafeFileHandle(writeFileH, true);
-                if (writeFileHandle.IsInvalid)
+                _writeFileHandle = new SafeFileHandle(writeFileH, true);
+                if (_writeFileHandle.IsInvalid)
                 {
                     // writeEvent = null;
                     // writeFileHandle = null;
-                    writeRing = null;
+                    _writeRing = null;
                     //CloseInterface();
                     retout = 208;
-                    goto ErrorOut;
                 }
-
-                writeEvent = FileIOApiDeclarations.CreateEvent(ref securityAttrUnused, 1, 0, "");
-                writeRing = new RingBuffer(128, WriteLength);
-                writeThreadHandle = new Thread(WriteThread)
+                else
                 {
-                    IsBackground = true,
-                    Name = $"PIEHidWriteThread for {Pid}"
-                };
-                writeThreadActive = true;
-                writeThreadHandle.Start();
+                    _writeEvent = FileIOApiDeclarations.CreateEvent(ref _securityAttrUnused, 1, 0, "");
+                    _writeRing = new RingBuffer(128, WriteLength);
+                    _writeThreadHandle = new Thread(WriteThread)
+                    {
+                        IsBackground = true,
+                        Name = $"PIEHidWriteThread for {Pid}"
+                    };
+                    _writeThreadActive = true;
+                    _writeThreadHandle.Start();
+                }
             }
 
-            connected = true;
-            ErrorOut:
+
             if (retin == 0 && retout == 0)
+            {
+                _connected = true;
                 return 0;
+            }
+
             if (retin == 207 && retout == 208)
                 return 209;
             return retin + retout;
@@ -476,99 +475,99 @@ namespace PIEHidNetCore
         /// </summary>
         public void CloseInterface()
         {
-            if (holdErrorThreadOpen || holdDataThreadOpen) return;
+            if (_holdErrorThreadOpen || _holdDataThreadOpen) return;
 
             // Shut down event thread
-            if (dataThreadActive)
+            if (_dataThreadActive)
             {
-                dataThreadActive = false;
-                _ = FileIOApiDeclarations.SetEvent(readEvent);
+                _dataThreadActive = false;
+                _ = FileIOApiDeclarations.SetEvent(_readEvent);
                 var n = 0;
-                if (dataThreadHandle != null)
+                if (_dataThreadHandle != null)
                 {
-                    while (dataThreadHandle.IsAlive)
+                    while (_dataThreadHandle.IsAlive)
                     {
                         Thread.Sleep(10);
                         n++;
                         if (n == 10)
                         {
-                            dataThreadHandle.Abort();
+                            _dataThreadHandle.Abort();
                             break;
                         }
                     }
 
-                    dataThreadHandle = null;
+                    _dataThreadHandle = null;
                 }
             }
 
             // Shut down read thread
-            if (readThreadActive)
+            if (_readThreadActive)
             {
-                readThreadActive = false;
+                _readThreadActive = false;
                 // Wait for thread to exit
-                if (readThreadHandle != null)
+                if (_readThreadHandle != null)
                 {
                     var n = 0;
-                    while (readThreadHandle.IsAlive)
+                    while (_readThreadHandle.IsAlive)
                     {
                         Thread.Sleep(10);
                         n++;
                         if (n == 10)
                         {
-                            readThreadHandle.Abort();
+                            _readThreadHandle.Abort();
                             break;
                         }
                     }
 
-                    readThreadHandle = null;
+                    _readThreadHandle = null;
                 }
             }
 
-            if (writeThreadActive)
+            if (_writeThreadActive)
             {
-                writeThreadActive = false;
-                _ = FileIOApiDeclarations.SetEvent(writeEvent);
-                if (writeThreadHandle != null)
+                _writeThreadActive = false;
+                _ = FileIOApiDeclarations.SetEvent(_writeEvent);
+                if (_writeThreadHandle != null)
                 {
                     var n = 0;
-                    while (writeThreadHandle.IsAlive)
+                    while (_writeThreadHandle.IsAlive)
                     {
                         Thread.Sleep(10);
                         n++;
                         if (n == 10)
                         {
-                            writeThreadHandle.Abort();
+                            _writeThreadHandle.Abort();
                             break;
                         }
                     }
 
-                    writeThreadHandle = null;
+                    _writeThreadHandle = null;
                 }
             }
 
-            if (errorThreadActive)
+            if (_errorThreadActive)
             {
-                errorThreadActive = false;
-                if (errorThreadHandle != null)
+                _errorThreadActive = false;
+                if (_errorThreadHandle != null)
                 {
                     var n = 0;
-                    while (errorThreadHandle.IsAlive)
+                    while (_errorThreadHandle.IsAlive)
                     {
                         Thread.Sleep(10);
                         n++;
                         if (n == 10)
                         {
-                            errorThreadHandle.Abort();
+                            _errorThreadHandle.Abort();
                             break;
                         }
                     }
 
-                    errorThreadHandle = null;
+                    _errorThreadHandle = null;
                 }
             }
 
-            if (writeRing != null) writeRing = null;
-            if (readRing != null) readRing = null;
+            _writeRing = null;
+            _readRing = null;
 
             //  if (readEvent != null) {readEvent = null;}
             //  if (writeEvent != null) { writeEvent = null; }
@@ -576,16 +575,16 @@ namespace PIEHidNetCore
             if (0x00FF != Pid && 0x00FE != Pid && 0x00FD != Pid && 0x00FC != Pid && 0x00FB != Pid || Version > 272)
             {
                 // it's not an old VEC foot pedal (those hang when closing the handle)
-                if (readFileHandle !=
+                if (_readFileHandle !=
                     null) // 9/1/09 - readFileHandle != null ||added by Onur to avoid null reference exception
-                    if (!readFileHandle.IsInvalid)
-                        readFileHandle.Close();
-                if (writeFileHandle != null)
-                    if (!writeFileHandle.IsInvalid)
-                        writeFileHandle.Close();
+                    if (!_readFileHandle.IsInvalid)
+                        _readFileHandle.Close();
+                if (_writeFileHandle != null)
+                    if (!_writeFileHandle.IsInvalid)
+                        _writeFileHandle.Close();
             }
 
-            connected = false;
+            _connected = false;
         }
 
         /// <summary>
@@ -595,22 +594,22 @@ namespace PIEHidNetCore
         /// <returns></returns>
         public int SetDataCallback(PIEDataHandler handler)
         {
-            if (!connected)
+            if (!_connected)
                 return 702;
             if (ReadLength == 0)
                 return 703;
 
-            if (registeredDataHandler == null)
+            if (_registeredDataHandler == null)
             {
                 //registeredDataHandler is not defined so define it and create thread. 
-                registeredDataHandler = handler;
-                dataThreadHandle = new Thread(DataEventThread)
+                _registeredDataHandler = handler;
+                _dataThreadHandle = new Thread(DataEventThread)
                 {
                     IsBackground = true,
                     Name = $"PIEHidEventThread for {Pid}"
                 };
-                dataThreadActive = true;
-                dataThreadHandle.Start();
+                _dataThreadActive = true;
+                _dataThreadHandle.Start();
             }
             else
             {
@@ -627,20 +626,20 @@ namespace PIEHidNetCore
         /// <returns></returns>
         public int SetErrorCallback(PIEErrorHandler handler)
         {
-            if (!connected)
+            if (!_connected)
                 return 802;
 
-            if (registeredErrorHandler == null)
+            if (_registeredErrorHandler == null)
             {
                 //registeredErrorHandler is not defined so define it and create thread. 
-                registeredErrorHandler = handler;
-                errorThreadHandle = new Thread(ErrorThread)
+                _registeredErrorHandler = handler;
+                _errorThreadHandle = new Thread(ErrorThread)
                 {
                     IsBackground = true,
                     Name = $"PIEHidErrorThread for {Pid}"
                 };
-                errorThreadActive = true;
-                errorThreadHandle.Start();
+                _errorThreadActive = true;
+                _errorThreadHandle.Start();
             }
             else
             {
@@ -659,13 +658,13 @@ namespace PIEHidNetCore
         {
             if (ReadLength == 0)
                 return 502;
-            if (!connected)
+            if (!_connected)
                 return 507;
             if (dest == null)
                 dest = new byte[ReadLength];
             if (dest.Length < ReadLength)
                 return 503;
-            if (readRing.GetLast(dest) != 0)
+            if (_readRing.GetLast(dest) != 0)
                 return 504;
             return 0;
         }
@@ -677,13 +676,13 @@ namespace PIEHidNetCore
         /// <returns></returns>
         public int ReadData(ref byte[] dest)
         {
-            if (!connected)
+            if (!_connected)
                 return 303;
             if (dest == null)
                 dest = new byte[ReadLength];
             if (dest.Length < ReadLength)
                 return 311;
-            if (readRing.Get(dest) != 0)
+            if (_readRing.Get(dest) != 0)
                 return 304;
             return 0;
         }
@@ -719,21 +718,21 @@ namespace PIEHidNetCore
         {
             if (WriteLength == 0)
                 return 402;
-            if (!connected)
+            if (!_connected)
                 return 406;
             if (wData.Length < WriteLength)
                 return 403;
-            if (writeRing == null)
+            if (_writeRing == null)
                 return 405;
-            if (errCodeW != 0)
-                return errCodeW;
-            if (writeRing.TryPut(wData) == 3)
+            if (_errCodeW != 0)
+                return _errCodeW;
+            if (_writeRing.TryPut(wData) == 3)
             {
                 Thread.Sleep(1);
                 return 404;
             }
 
-            _ = FileIOApiDeclarations.SetEvent(writeEvent);
+            _ = FileIOApiDeclarations.SetEvent(_writeEvent);
             return 0;
         }
 
@@ -826,27 +825,27 @@ namespace PIEHidNetCore
                             if (0 != HidApiDeclarations.HidP_GetCaps(pPerparsedData, ref hidCaps))
                             {
                                 // Got Capabilities, add device to list
-                                var Mstring = new byte[128];
+                                var mstring = new byte[128];
                                 var ssss = "";
                                 ;
-                                if (0 != HidApiDeclarations.HidD_GetManufacturerString(fileHandle, ref Mstring[0], 128))
+                                if (0 != HidApiDeclarations.HidD_GetManufacturerString(fileHandle, ref mstring[0], 128))
                                     for (var i = 0; i < 64; i++)
                                     {
                                         var t = new byte[2];
-                                        t[0] = Mstring[2 * i];
-                                        t[1] = Mstring[2 * i + 1];
+                                        t[0] = mstring[2 * i];
+                                        t[1] = mstring[2 * i + 1];
                                         if (t[0] == 0) break;
                                         ssss += Encoding.Unicode.GetString(t);
                                     }
 
-                                var Pstring = new byte[128];
+                                var pstring = new byte[128];
                                 var psss = "";
-                                if (0 != HidApiDeclarations.HidD_GetProductString(fileHandle, ref Pstring[0], 128))
+                                if (0 != HidApiDeclarations.HidD_GetProductString(fileHandle, ref pstring[0], 128))
                                     for (var i = 0; i < 64; i++)
                                     {
                                         var t = new byte[2];
-                                        t[0] = Pstring[2 * i];
-                                        t[1] = Pstring[2 * i + 1];
+                                        t[0] = pstring[2 * i];
+                                        t[1] = pstring[2 * i + 1];
                                         if (t[0] == 0) break;
                                         psss += Encoding.Unicode.GetString(t);
                                     }
@@ -859,8 +858,9 @@ namespace PIEHidNetCore
                         }
                     }
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
+                    Console.WriteLine("Exception thrown: " + e.ToString() );
                 }
                 finally
                 {
@@ -871,68 +871,6 @@ namespace PIEHidNetCore
             var ret = new PIEDevice[devices.Count];
             devices.CopyTo(ret, 0);
             return ret;
-        }
-
-        private int SendSausageCommands(ushort[] commandSequence)
-        {
-            if (WriteLength != 2 || HidUsagePage != 1 || HidUsage != 6) // hid page 1, usage 6 is keyboard
-                return 1302;
-
-            var securityAttributes = new FileIOApiDeclarations.SECURITY_ATTRIBUTES
-            {
-                lpSecurityDescriptor = IntPtr.Zero,
-                bInheritHandle = Convert.ToInt32(true)
-            };
-            securityAttributes.nLength = Marshal.SizeOf(securityAttributes);
-
-            var hF = FileIOApiDeclarations.CreateFile(Path,
-                FileIOApiDeclarations.GENERIC_WRITE,
-                FileIOApiDeclarations.FILE_SHARE_READ | FileIOApiDeclarations.FILE_SHARE_WRITE,
-                IntPtr.Zero,
-                FileIOApiDeclarations.OPEN_EXISTING,
-                0,
-                0);
-            var hFile = new SafeFileHandle(hF, true);
-            if (hFile.IsInvalid)
-            {
-                return 1301;
-            }
-
-            var overlapped = new FileIOApiDeclarations.OVERLAPPED
-            {
-                hEvent = IntPtr.Zero,
-                Offset = 0, // IntPtr.Zero;
-                OffsetHigh = 0 // IntPtr.Zero;
-            };
-            foreach (var command in commandSequence)
-            {
-                var cmd = (uint)command << 16;
-                uint bytesReturned = 0;
-
-                if (!DeviceManagementApiDeclarations.DeviceIoControl(hFile, 0x000b0008, ref cmd, 4, IntPtr.Zero, 0,
-                        ref bytesReturned, ref overlapped)) return Marshal.GetLastWin32Error();
-            }
-
-            hFile.Close();
-            return 0;
-        }
-
-        /// <summary>
-        ///     ???
-        /// </summary>
-        /// <returns></returns>
-        public int ConvertToSplatMode()
-        {
-            return SendSausageCommands(convertToSplatModeSausages);
-        }
-
-        /// <summary>
-        ///     ???
-        /// </summary>
-        /// <returns></returns>
-        public int SendLEDSausage()
-        {
-            return SendSausageCommands(ledSausages);
         }
     }
 }
